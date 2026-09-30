@@ -1,0 +1,59 @@
+{
+  "expo": {
+    "name": "Focus Compass",
+    "slug": "focus-guard",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "icon": "./assets/images/focus-guard-icon.png",
+    "scheme": "focus-guard",
+    "userInterfaceStyle": "automatic",
+    "ios": {
+      "supportsTablet": false,
+      "appleTeamId": "N53UU5W83W",
+      "bundleIdentifier": "com.focusguard.app"
+    },
+    "android": {
+      "package": "com.focusguard.app",
+      "versionCode": 1,
+      "blockedPermissions": [
+        "android.permission.RECORD_AUDIO"
+      ]
+    },
+    "web": {
+      "favicon": "./assets/images/focus-guard-icon.png"
+    },
+    "plugins": [
+      "expo-router",
+      [
+        "expo-camera",
+        {
+          "cameraPermission": "Focus Compass uses your camera to photograph study materials, such as a math problem. When you tap Explain, the photo is sent to an AI service to generate a step-by-step explanation.",
+          "microphonePermission": false,
+          "recordAudioAndroid": false
+        }
+      ],
+      "expo-notifications",
+      [
+        "expo-audio",
+        {
+          "enableBackgroundPlayback": true,
+          "microphonePermission": false,
+          "recordAudioAndroid": false
+        }
+      ],
+      "@clerk/expo",
+      [
+        "expo-secure-store",
+        {
+          "faceIDPermission": false
+        }
+      ],
+      "expo-asset",
+      "./plugins/withRequiredPermissions"
+    ],
+    "experiments": {
+      "typedRoutes": true,
+      "reactCompiler": true
+    }
+  }
+}

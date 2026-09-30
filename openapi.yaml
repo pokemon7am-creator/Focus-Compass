@@ -1,0 +1,511 @@
+openapi: 3.1.0
+info:
+  # Do not change the title, if the title changes, the import paths will be broken
+  title: Api
+  version: 0.1.0
+  description: API specification
+servers:
+  - url: /api
+    description: Base API path
+tags:
+  - name: health
+    description: Health operations
+  - name: leaderboard
+    description: Privacy-preserving coarse-area activity rankings
+  - name: tutor
+    description: Study explanations and guided learning support
+  - name: roasts
+    description: Playful focus-friction messages
+  - name: practice
+    description: Authenticated cross-device practice synchronization
+paths:
+  /healthz:
+    get:
+      operationId: healthCheck
+      tags: [health]
+      summary: Health check
+      description: Returns server health status
+      responses:
+        "200":
+          description: Healthy
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/HealthStatus"
+  /leaderboard:
+    get:
+      operationId: getAreaLeaderboard
+      tags: [leaderboard]
+      summary: Get a coarse-area leaderboard
+      parameters:
+        - in: query
+          name: areaKey
+          required: true
+          schema:
+            type: string
+            minLength: 2
+            maxLength: 120
+      responses:
+        "200":
+          description: Real community-submitted activity totals for the area
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AreaLeaderboard"
+    post:
+      operationId: syncAreaLeaderboard
+      tags: [leaderboard]
+      summary: Sync this installation's measured activity totals
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/LeaderboardSync"
+      responses:
+        "200":
+          description: Saved leaderboard entry
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/LeaderboardEntry"
+  /tutor/explain:
+    post:
+      operationId: explainTutorQuestion
+      tags: [tutor]
+      summary: Explain a study question using the supplied subject and materials
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/TutorQuestion"
+      responses:
+        "200":
+          description: A tutor explanation and a follow-up prompt
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/TutorExplanation"
+        "503":
+          description: Tutor provider is temporarily unavailable
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+  /roasts/generate:
+    post:
+      operationId: generateRoast
+      tags: [roasts]
+      summary: Generate a playful roast for a focus interruption
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/RoastRequest"
+      responses:
+        "200":
+          description: A generated focus roast
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/RoastResponse"
+        "503":
+          description: Roast provider is temporarily unavailable
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+  /practice:
+    get:
+      operationId: getPractice
+      tags: [practice]
+      summary: Restore the signed-in user's latest practice snapshot
+      responses:
+        "200":
+          description: Current practice snapshot or an empty initial revision
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PracticeSyncResponse"
+        "401":
+          description: User is not signed in
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+    put:
+      operationId: savePractice
+      tags: [practice]
+      summary: Save a practice snapshot when its expected revision is current
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/PracticeSyncRequest"
+      responses:
+        "200":
+          description: Saved practice snapshot
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PracticeSyncResponse"
+        "400":
+          description: Invalid sync payload
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+        "401":
+          description: User is not signed in
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+        "409":
+          description: Revision conflict with the current server snapshot
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PracticeSyncResponse"
+  /practice/claims:
+    post:
+      operationId: claimPracticeReward
+      tags: [practice]
+      summary: Atomically claim an earned weekly mission or Flow Pass reward
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/RewardClaimInput"
+      responses:
+        "200":
+          description: Reward was claimed or had already been claimed
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/RewardClaimResponse"
+        "400":
+          description: Invalid or obsolete claim
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+        "401":
+          description: User is not signed in
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+        "403":
+          description: Reward has not been earned or requires Premium
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+        "409":
+          description: Revision conflict with the current server snapshot
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PracticeSyncResponse"
+        "503":
+          description: Premium entitlement could not be verified
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+components:
+  schemas:
+    PracticeSnapshot:
+      type: object
+      properties:
+        version:
+          type: integer
+          const: 1
+        focus:
+          $ref: "#/components/schemas/FocusSyncSnapshot"
+        rewards:
+          $ref: "#/components/schemas/RewardsSyncSnapshot"
+      required: [version, focus, rewards]
+      additionalProperties: false
+    GuardedApp:
+      type: object
+      properties:
+        id: { type: string, minLength: 1, maxLength: 200 }
+        name: { type: string, minLength: 1, maxLength: 100 }
+        category: { type: string, minLength: 1, maxLength: 100 }
+        active: { type: boolean }
+      required: [id, name, category, active]
+      additionalProperties: false
+    SessionReflection:
+      type: object
+      properties:
+        feeling:
+          type: string
+          enum: [clear, okay, scattered]
+        note:
+          type: string
+          maxLength: 2000
+      required: [feeling]
+      additionalProperties: false
+    FocusSession:
+      type: object
+      properties:
+        id: { type: string, minLength: 1, maxLength: 200 }
+        completedAt: { type: string, minLength: 1, maxLength: 40 }
+        durationMinutes: { type: integer, minimum: 1, maximum: 1440 }
+        reflection:
+          $ref: "#/components/schemas/SessionReflection"
+      required: [id, completedAt, durationMinutes]
+      additionalProperties: false
+    FocusSyncSnapshot:
+      type: object
+      properties:
+        apps:
+          type: array
+          maxItems: 100
+          items: { $ref: "#/components/schemas/GuardedApp" }
+        sessions:
+          type: array
+          maxItems: 20000
+          items: { $ref: "#/components/schemas/FocusSession" }
+        overrideEvents:
+          type: array
+          maxItems: 50000
+          items: { type: string, minLength: 1, maxLength: 40 }
+        pendingReflectionId:
+          oneOf:
+            - type: string
+              minLength: 1
+              maxLength: 200
+            - type: "null"
+        stasisTokens: { type: integer, minimum: 0, maximum: 100000 }
+        protectedDateKeys:
+          type: array
+          maxItems: 10000
+          items: { type: string, minLength: 1, maxLength: 20 }
+      required: [apps, sessions, overrideEvents, pendingReflectionId, stasisTokens, protectedDateKeys]
+      additionalProperties: false
+    EquippedRewards:
+      type: object
+      properties:
+        breath:
+          type: string
+          enum: [classic, moonlight, starlight, sunrise, aurora, paperfold]
+        roast:
+          type: string
+          enum: [classic, bold, dry, chaos, margin-notes]
+      required: [breath, roast]
+      additionalProperties: false
+    RewardsSyncSnapshot:
+      type: object
+      properties:
+        leaves: { type: integer, minimum: 0, maximum: 10000000 }
+        mindfulMinutes: { type: integer, minimum: 0, maximum: 10000000 }
+        unlockedRewards:
+          type: array
+          maxItems: 1000
+          items: { type: string, minLength: 1, maxLength: 200 }
+        equipped: { $ref: "#/components/schemas/EquippedRewards" }
+        stillnessEvents:
+          type: array
+          maxItems: 50000
+          items: { type: string, minLength: 1, maxLength: 40 }
+        ownedCollectibles:
+          type: array
+          maxItems: 4
+          items:
+            type: string
+            enum: [paper-folded-comet, paper-notebook-moon, paper-origami-rocket, paper-constellation-page]
+        selectedCollectible:
+          oneOf:
+            - type: string
+              enum: [paper-folded-comet, paper-notebook-moon, paper-origami-rocket, paper-constellation-page]
+            - type: "null"
+        soundscape:
+          type: string
+          enum: [none, rainy-library, quiet-spacecraft, turning-pages, greenhouse-rain, misty-window, sunday-vinyl, ocean-desk, library-lamp]
+        rewardClaimKeys:
+          type: array
+          maxItems: 10000
+          items: { type: string, minLength: 1, maxLength: 100 }
+      required: [leaves, mindfulMinutes, unlockedRewards, equipped, stillnessEvents, ownedCollectibles, selectedCollectible, soundscape]
+      additionalProperties: false
+    RewardClaimInput:
+      type: object
+      properties:
+        expectedRevision:
+          type: integer
+          minimum: 0
+        claimKey:
+          type: string
+          minLength: 1
+          maxLength: 100
+        timeZone:
+          type: string
+          minLength: 1
+          maxLength: 100
+          description: IANA time zone used to determine the current week or month
+      required: [expectedRevision, claimKey, timeZone]
+      additionalProperties: false
+    RewardClaimResponse:
+      type: object
+      properties:
+        status:
+          type: string
+          enum: [claimed, already-claimed]
+        practice:
+          $ref: "#/components/schemas/PracticeSyncResponse"
+      required: [status, practice]
+      additionalProperties: false
+    PracticeSyncRequest:
+      type: object
+      properties:
+        expectedRevision:
+          type: integer
+          minimum: 0
+        snapshot:
+          $ref: "#/components/schemas/PracticeSnapshot"
+      required: [expectedRevision, snapshot]
+    PracticeSyncResponse:
+      type: object
+      properties:
+        revision:
+          type: integer
+          minimum: 0
+        snapshot:
+          oneOf:
+            - $ref: "#/components/schemas/PracticeSnapshot"
+            - type: "null"
+        updatedAt:
+          oneOf:
+            - type: string
+              format: date-time
+            - type: "null"
+      required: [revision, snapshot, updatedAt]
+    HealthStatus:
+      type: object
+      properties:
+        status:
+          type: string
+      required:
+        - status
+    LeaderboardSync:
+      type: object
+      properties:
+        installationId:
+          type: string
+          minLength: 8
+          maxLength: 128
+        nickname:
+          type: string
+          minLength: 2
+          maxLength: 40
+        areaKey:
+          type: string
+          minLength: 2
+          maxLength: 120
+        areaLabel:
+          type: string
+          minLength: 2
+          maxLength: 120
+        focusMinutes:
+          type: integer
+          minimum: 0
+          maximum: 100000
+        stillnessMinutes:
+          type: integer
+          minimum: 0
+          maximum: 100000
+      required: [installationId, nickname, areaKey, areaLabel, focusMinutes, stillnessMinutes]
+    LeaderboardEntry:
+      type: object
+      properties:
+        nickname:
+          type: string
+        focusMinutes:
+          type: integer
+        stillnessMinutes:
+          type: integer
+        totalMinutes:
+          type: integer
+        updatedAt:
+          type: string
+          format: date-time
+      required: [nickname, focusMinutes, stillnessMinutes, totalMinutes, updatedAt]
+    AreaLeaderboard:
+      type: object
+      properties:
+        areaLabel:
+          type: string
+        entries:
+          type: array
+          items:
+            $ref: "#/components/schemas/LeaderboardEntry"
+      required: [areaLabel, entries]
+    TutorQuestion:
+      type: object
+      properties:
+        subject:
+          type: string
+          minLength: 1
+          maxLength: 80
+        materials:
+          type: string
+          maxLength: 12000
+        imageDataUrl:
+          type: string
+          description: Optional camera photo encoded as a data URL for visual study material.
+          maxLength: 5000000
+        question:
+          type: string
+          minLength: 1
+          maxLength: 4000
+      required: [subject, question]
+    TutorExplanation:
+      type: object
+      properties:
+        explanation:
+          type: string
+        keyIdeas:
+          type: array
+          items:
+            type: string
+        followUp:
+          type: string
+      required: [explanation, keyIdeas, followUp]
+    RoastRequest:
+      type: object
+      properties:
+        style:
+          type: string
+          enum: [classic, bold, dry, chaos, margin-notes]
+        mode:
+          type: string
+          enum: [override, app-switch, end-session]
+        elapsedMinutes:
+          type: integer
+          minimum: 0
+          maximum: 1440
+        overrideCount:
+          type: integer
+          minimum: 0
+          maximum: 1000
+      required: [style, mode, elapsedMinutes, overrideCount]
+    RoastResponse:
+      type: object
+      properties:
+        roast:
+          type: string
+      required: [roast]
+    ApiError:
+      type: object
+      properties:
+        message:
+          type: string
+      required: [message]
+
